@@ -1,0 +1,6 @@
+{
+  "name": "Mkraftman Sky Q Media Control",
+  "render_readme": true,
+  "filename": "mkraftman-sky-q-media-control.js",
+  "homeassistant": "2024.1.0"
+}
