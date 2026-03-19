@@ -187,8 +187,7 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
           font-style: italic;
           font-family: Georgia, serif;
         }
-        .ctrl.play ha-icon,
-        .ctrl.pause ha-icon {
+        .ctrl.pp ha-icon {
           --mdc-icon-size: 55px;
         }
       </style>
@@ -209,11 +208,8 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
             <button class="ctrl" id="rw">
               <ha-icon icon="mdi:rewind"></ha-icon>
             </button>
-            <button class="ctrl play" id="play">
-              <ha-icon icon="mdi:play"></ha-icon>
-            </button>
-            <button class="ctrl pause" id="pause">
-              <ha-icon icon="mdi:pause"></ha-icon>
+            <button class="ctrl pp" id="pp">
+              <ha-icon icon="mdi:play-pause"></ha-icon>
             </button>
             <button class="ctrl" id="ff">
               <ha-icon icon="mdi:fast-forward"></ha-icon>
@@ -236,8 +232,7 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
 
     shadow.getElementById("rec").addEventListener("click", () => this._sendCommand("record"));
     shadow.getElementById("rw").addEventListener("click", () => this._sendCommand("rewind"));
-    shadow.getElementById("play").addEventListener("click", () => this._sendCommand("play"));
-    shadow.getElementById("pause").addEventListener("click", () => this._sendCommand("pause"));
+    shadow.getElementById("pp").addEventListener("click", () => this._sendCommand("play"));
     shadow.getElementById("ff").addEventListener("click", () => this._sendCommand("fastforward"));
     shadow.getElementById("info").addEventListener("click", () => this._sendCommand("i"));
 
