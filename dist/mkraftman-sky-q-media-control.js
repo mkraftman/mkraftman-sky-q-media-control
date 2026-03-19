@@ -187,8 +187,11 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
           font-style: italic;
           font-family: Georgia, serif;
         }
+        .ctrl.pp {
+          max-width: 132px;
+        }
         .ctrl.pp ha-icon {
-          --mdc-icon-size: 55px;
+          --mdc-icon-size: 65px;
         }
       </style>
 
