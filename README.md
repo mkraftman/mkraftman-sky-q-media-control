@@ -1,4 +1,4 @@
-# mkraftman-sky-q-media-control
+# Mkraftman Sky Q Media Control
 
 Custom HACS Lovelace card for Sky Q transport controls via `remote.send_command`.
 
