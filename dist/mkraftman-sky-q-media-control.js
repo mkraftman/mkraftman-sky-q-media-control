@@ -304,7 +304,7 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
       ppIcon: shadow.getElementById("ppIcon"),
     };
 
-    shadow.getElementById("rec").addEventListener("click", () => this._sendCommand("record"));
+    shadow.getElementById("rec").addEventListener("click", () => this._pressRecord());
     shadow.getElementById("rw").addEventListener("click", () => this._sendCommand("rewind"));
     shadow.getElementById("pp").addEventListener("click", () => this._sendCommand("play"));
     shadow.getElementById("ff").addEventListener("click", () => this._sendCommand("fastforward"));
@@ -521,6 +521,22 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
     };
     img.onerror = () => {};
     img.src = url;
+  }
+
+  /**
+   * Send REC, then ask HA to re-poll the Sky Q media player so the recording
+   * indicator updates without waiting for the integration's 10 s poll. The
+   * box takes a moment to start the recording, so check twice.
+   */
+  _pressRecord() {
+    this._sendCommand("record");
+    const mediaId = this._config && this._config.media_entity;
+    if (!mediaId) return;
+    if (this._recRefreshTimers) this._recRefreshTimers.forEach(clearTimeout);
+    this._recRefreshTimers = [1500, 4000].map((ms) => setTimeout(() => {
+      if (!this._hass) return;
+      this._hass.callService("homeassistant", "update_entity", { entity_id: mediaId });
+    }, ms));
   }
 
   _sendCommand(command) {
