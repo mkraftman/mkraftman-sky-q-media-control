@@ -380,7 +380,9 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
     view.playState = media.state; // playing / paused
     view.picture = a.entity_picture_local || a.entity_picture || null;
     const type = a.skyq_media_type;
-    view.recording = type === "liverec";
+    // skyq reports "liverecord" (SKYQ_LIVEREC) only when the integration's
+    // "get live record" option is enabled.
+    view.recording = type === "liverecord";
 
     if (type === "app") {
       // Apps on the box (Netflix, YouTube...): media_title carries the app name.
@@ -389,7 +391,7 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
       return view;
     }
 
-    const isLive = (type === "live" || type === "liverec") && a.skyq_channelno;
+    const isLive = (type === "live" || type === "liverecord") && a.skyq_channelno;
     if (isLive) {
       view.left = a.media_channel || a.media_title || SKYQ_BRAND;
       view.right = String(a.skyq_channelno);
