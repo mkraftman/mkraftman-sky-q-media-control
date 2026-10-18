@@ -22,3 +22,7 @@ Custom HACS Lovelace card for Sky Q transport controls via `remote.send_command`
 type: custom:mkraftman-sky-q-media-control
 entity: remote.sky_q_living_room
 ```
+
+## Releasing
+
+Bump the version in `VERSION` (e.g. `1.0.1`) and push to `main`. The release workflow creates the matching `vX.Y.Z` tag and GitHub release with `dist/mkraftman-sky-q-media-control.js` attached. Pushing a `vX.Y.Z` tag directly also still works.
