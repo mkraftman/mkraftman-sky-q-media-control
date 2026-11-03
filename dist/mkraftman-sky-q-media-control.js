@@ -25,6 +25,10 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
     this._customFg = null;
     this._lastPicture = null;
     this._colorGeneration = 0;
+    this._bgIsArt = false;     // true = programme artwork, false = sky.png device image
+    this._bgUrl = SKYQ_DEFAULT_ART;
+    this._artCrop = null;      // plain-border trim for the current artwork, keyed by url
+    this._cropPending = null;
   }
 
   static getStubConfig() {
@@ -112,6 +116,15 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
           right: 0; top: 0; bottom: 0;
           background: linear-gradient(to right, ${SKYQ_DEFAULT_BG} 0%, transparent 100%);
           opacity: 1;
+        }
+        /* Dims programme artwork (not the Sky device image) so text stays readable. */
+        .bg-shade {
+          position: absolute;
+          right: 0; top: 0; bottom: 0;
+          width: 0;
+          background: rgba(0, 0, 0, 0.35);
+          opacity: 0;
+          transition: opacity 0.8s ease;
         }
 
         .player {
@@ -259,6 +272,7 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
         <div class="bg">
           <div class="bg-color" id="bgColor"></div>
           <div class="bg-image" id="bgImage"></div>
+          <div class="bg-shade" id="bgShade"></div>
           <div class="bg-gradient" id="bgGrad"></div>
         </div>
         <div class="player">
@@ -299,6 +313,7 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
       episode: shadow.getElementById("episode"),
       bgColor: shadow.getElementById("bgColor"),
       bgImage: shadow.getElementById("bgImage"),
+      bgShade: shadow.getElementById("bgShade"),
       bgGrad: shadow.getElementById("bgGrad"),
       rec: shadow.getElementById("rec"),
       ppIcon: shadow.getElementById("ppIcon"),
@@ -323,12 +338,114 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
   }
 
   _updateBgSize() {
-    if (!this._el.card || !this._el.bgImage) return;
-    const h = this._el.card.offsetHeight;
-    if (h > 0) {
-      this._el.bgImage.style.width = h + "px";
-      this._el.bgGrad.style.width = h + "px";
+    const el = this._el;
+    if (!el.card || !el.bgImage) return;
+    const H = el.card.offsetHeight;
+    if (!(H > 0)) return;
+    // Programme artwork: 4:3 box (capped to the card width). Device image: square.
+    const W = this._bgIsArt
+      ? Math.min(Math.round(H * 4 / 3), el.card.offsetWidth || Infinity)
+      : H;
+    el.bgImage.style.width = W + "px";
+    el.bgGrad.style.width = W + "px";
+    el.bgShade.style.width = W + "px";
+    el.bgShade.style.opacity = this._bgIsArt ? "1" : "0";
+
+    // Cover the box with the artwork, excluding any plain border strips found
+    // on it (e.g. letterbox bars or a pale edge).
+    const crop = this._artCrop;
+    if (this._bgIsArt && crop && crop.url === this._bgUrl
+        && (crop.l || crop.r || crop.t || crop.b)) {
+      const fw = 1 - crop.l - crop.r;
+      const fh = 1 - crop.t - crop.b;
+      const regionAspect = (crop.ar * fw) / fh;
+      let iw, ih, x, y;
+      if (regionAspect > W / H) {
+        ih = H / fh; iw = ih * crop.ar;
+        x = -iw * crop.l - (iw * fw - W) / 2;
+        y = -ih * crop.t;
+      } else {
+        iw = W / fw; ih = iw / crop.ar;
+        x = -iw * crop.l;
+        y = -ih * crop.t - (ih * fh - H) / 2;
+      }
+      el.bgImage.style.backgroundSize = iw + "px " + ih + "px";
+      el.bgImage.style.backgroundPosition = x + "px " + y + "px";
+    } else {
+      el.bgImage.style.backgroundSize = "";
+      el.bgImage.style.backgroundPosition = "";
     }
+  }
+
+  /**
+   * Measure plain border strips on `url` once (kept in _artCrop, keyed by URL)
+   * and re-lay-out if that artwork is still shown. A failed load or tainted
+   * canvas records "no trim" so it isn't retried.
+   */
+  _ensureBorderCrop(url) {
+    if (this._artCrop && this._artCrop.url === url) return;
+    if (this._cropPending === url) return;
+    this._cropPending = url;
+    const noTrim = { url, l: 0, r: 0, t: 0, b: 0, ar: 1 };
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      if (this._cropPending === url) this._cropPending = null;
+      try {
+        const crop = this._detectBorders(img);
+        crop.url = url;
+        this._artCrop = crop;
+      } catch (_) {
+        this._artCrop = noTrim;
+      }
+      if (this._bgUrl === url) this._updateBgSize();
+    };
+    img.onerror = () => {
+      if (this._cropPending === url) this._cropPending = null;
+      this._artCrop = noTrim;
+    };
+    img.src = url;
+  }
+
+  /**
+   * Detect plain border strips (uniform columns/rows) along each edge of an
+   * image, sampled at 128x128; each side capped at 12%. Same method as
+   * mkraftman-media-control. Returns fractions { l, r, t, b } and aspect `ar`.
+   */
+  _detectBorders(img) {
+    const N = 128, MAX = Math.round(N * 0.12), TOL = 40;
+    const c = document.createElement("canvas");
+    c.width = N; c.height = N;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(img, 0, 0, N, N);
+    const d = ctx.getImageData(0, 0, N, N).data;
+    const px = (x, y) => { const i = (y * N + x) * 4; return [d[i], d[i + 1], d[i + 2]]; };
+    const lineMean = (pts) => {
+      let r = 0, g = 0, b = 0;
+      for (const p of pts) { r += p[0]; g += p[1]; b += p[2]; }
+      return [r / pts.length, g / pts.length, b / pts.length];
+    };
+    const dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+    const column = (x) => { const p = []; for (let y = 0; y < N; y++) p.push(px(x, y)); return p; };
+    const row = (y) => { const p = []; for (let x = 0; x < N; x++) p.push(px(x, y)); return p; };
+    const count = (lineAt) => {
+      const edge = lineMean(lineAt(0));
+      let k = 0;
+      for (; k < MAX; k++) {
+        const pts = lineAt(k);
+        const m = lineMean(pts);
+        if (dist(m, edge) > TOL) break;
+        if (pts.some(p => dist(p, m) > TOL)) break;
+      }
+      return k > 0 ? Math.min(k + 1, MAX) / N : 0;
+    };
+    return {
+      l: count(k => column(k)),
+      r: count(k => column(N - 1 - k)),
+      t: count(k => row(k)),
+      b: count(k => row(N - 1 - k)),
+      ar: img.naturalWidth / img.naturalHeight,
+    };
   }
 
   /**
@@ -448,12 +565,20 @@ class MkraftmanSkyQMediaControl extends HTMLElement {
     if (v.picture !== this._lastPicture) {
       this._lastPicture = v.picture;
       if (v.picture) {
+        // Programme artwork: 4:3 box, dimmed, plain borders trimmed.
         el.bgImage.style.backgroundImage = "url('" + v.picture + "')";
+        this._bgIsArt = true;
+        this._bgUrl = v.picture;
+        this._ensureBorderCrop(v.picture);
         this._extractColors(v.picture);
       } else {
+        // Sky device image: square box, undimmed (unchanged).
         el.bgImage.style.backgroundImage = "url('" + SKYQ_DEFAULT_ART + "')";
+        this._bgIsArt = false;
+        this._bgUrl = SKYQ_DEFAULT_ART;
         this._clearColors();
       }
+      this._updateBgSize();
     }
   }
 
